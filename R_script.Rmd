@@ -1,0 +1,538 @@
+---
+title: "Urban"
+author: "Viola Vavrovsky"
+date: "28 2 2021"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(haven)
+library(circlize)
+
+```
+
+```{r}
+dat <- read_dta("TI_UTE_London_data_outP2.dta")
+```
+
+```{r}
+epsilon <- 3.3263865
+```
+
+
+# Question 1
+```{r}
+dat %>% 
+  group_by(msoai) %>% 
+  slice(1) %>% 
+  select(1:2) %>% 
+  rename(destination_la = laname) -> district
+
+dat %>% 
+  select(-9:-14) %>% 
+  left_join(district, by = c("msoaj" = "msoai")) -> dat
+```
+
+
+```{r}
+dat %>% 
+  select(1:9,66) %>% 
+  group_by(laname) %>% 
+  slice(1:10) -> dat_small
+```
+
+
+```{r}
+dat %>% 
+  select(1, 66, 4) %>% 
+  group_by(laname, destination_la) %>% 
+  dplyr::summarize(ncomms = sum(ncomm)) %>% 
+  ungroup() %>% 
+  mutate(laname = sub(" .*", "", laname),
+         destination_la = sub(" .*", "", destination_la))-> dat_graph
+```
+
+
+```{r}
+chordDiagram(dat_graph, directional = 1)
+```
+```{r}
+dat %>% 
+  ggplot(aes(price_per_m2, fill = laname)) + geom_histogram(alpha = 0.5, position = "identity")+ scale_fill_viridis_d() +theme_minimal() + facet_wrap(vars(laname)) + theme(legend.position = "none") +
+  ggsave(filename = "price_hist.png", device = "png")
+```
+
+```{r}
+
+dat %>% 
+  ggplot(aes(Oi, fill = laname)) + geom_histogram(alpha = 0.5, position = "identity")+ scale_fill_viridis_d() +theme_minimal() + facet_wrap(vars(laname)) + theme(legend.position = "none") + ggsave(filename = "Oi_hist.png", device = "png")
+```
+
+```{r}
+dat %>% 
+  ggplot(aes(ncomm, fill = laname)) + geom_histogram(alpha = 0.5, position = "identity")+ scale_fill_viridis_d() +theme_minimal() + facet_wrap(vars(laname)) + theme(legend.position = "none") + xlim(c(NA,1500))   + ggsave(filename = "ncomm_hist.png", device = "png")
+```
+
+
+```{r}
+dat %>% 
+  ggplot(aes(commtime, fill = laname)) + geom_histogram(alpha = 0.5, position = "identity")+ scale_fill_viridis_d() +theme_minimal() + facet_wrap(vars(laname)) + theme(legend.position = "none") + ggsave(filename = "commtime_hist.png", device = "png")
+```
+```{r}
+dat %>% 
+  ggplot(aes(Oi, ncomm, color = laname)) + geom_point() + scale_fill_viridis_d() +theme_minimal() + theme(legend.position = "none")
+```
+
+```{r}
+dat %>% 
+  ggplot(aes(Oi, price_per_m2, color = laname)) + geom_point() + scale_color_viridis_d() + theme_minimal() + theme(legend.position = "none")
+```
+
+
+```{r}
+dat %>% 
+  ggplot(aes(medincj, commtime, color = laname)) + geom_point() + scale_color_viridis_d() + theme_minimal() + theme(legend.position = "none")
+```
+
+```{r}
+dat %>% 
+  select(4:10) %>% 
+  Hmisc::summarize()
+```
+
+```{r}
+dat %>% 
+  select(4:8, 16, 19) %>% 
+  psych::describe(skew = FALSE, quant = c(0.25, 0.75), IQR =TRUE, range =FALSE) -> tab
+varnames <-dimnames(tab)[[1]]
+  
+tab %>% 
+  as_tibble() %>% 
+  select(-1,-2,-5) %>% 
+  mutate(names = varnames) %>% 
+  column_to_rownames("names") %>% 
+  knitr::kable("latex")
+
+      
+```
+
+
+```{r}
+dat %>% 
+  filter(laname != destination_la) %>% 
+  group_by(laname) %>% 
+  summarize(total_comm = sum(ncomm))
+```
+
+
+# Question 2
+
+## 2.2
+
+```{r}
+dat %>% 
+  select(laname, msoai, "Hᴿi", "Hᴹi") %>% 
+  group_by(laname, msoai) %>% 
+  rename(HRi = "Hᴿi", HMi = "Hᴹi") %>% 
+  summarise(HRi = mean(HRi),  HMi = mean(HMi)) %>%
+  ungroup() %>% 
+  select(-2) %>% 
+  group_by(laname) %>% 
+  pivot_longer(2:3, names_to = "time", values_to = "population") %>% 
+  mutate(time = if_else(time == "HRi", "night", "day")) %>% 
+  ggplot(aes(population, fill =time))+ geom_histogram(position = "identity", alpha = 0.6) + theme_minimal() + facet_wrap(vars(laname)) +scale_x_continuous(breaks = scales::pretty_breaks(n = 3))+  ggsave("daynight.png", device = "png")
+```
+```{r}
+dat %>% 
+  select(laname, msoai, "Hᴿi", "Hᴹi") %>% 
+  group_by(laname, msoai) %>% 
+  rename(HRi = "Hᴿi", HMi = "Hᴹi") %>% 
+  summarise(HRi = mean(HRi),  HMi = mean(HMi)) %>%
+  ungroup() %>% 
+  select(-2) %>% 
+  group_by(laname) %>% 
+  summarise(HRi = sum(HRi),  HMi = sum(HMi), "day-night-ratio" = sum(HMi)/sum(HRi)) %>% 
+  knitr::kable("latex")
+```
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  group_by(laname) %>% 
+  summarize(mean = mean(HRi, na.rm = TRUE),sd = sd(HRi, na.rm = TRUE), IQR = IQR(HRi, na.rm = TRUE), q25 = quantile(HRi, 0.25), q75 = quantile(HRi, 0.75), min = min(HRi, na.rm = TRUE), max = max(HRi, na.rm =TRUE)) 
+
+
+dat %>% 
+  rename(HMi="Hᴹi") %>% 
+  group_by(laname) %>% 
+  summarize(mean = mean(HMi, na.rm = TRUE),sd = sd(HMi, na.rm = TRUE), IQR = IQR(HMi, na.rm = TRUE), q25 = quantile(HMi, 0.25), q75 = quantile(HMi, 0.75), min = min(HMi, na.rm = TRUE), max = max(HMi, na.rm =TRUE))
+
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  group_by(laname) %>% 
+  summarize(mean_day = mean(HMi), mean_night= mean(HRi))
+
+```
+
+## 2.3
+
+```{r}
+dat %>% 
+  rename(omega_j = "ωj") %>%
+  rename(omega_i = "ωi") %>% 
+  ggplot(aes(omega_j, fill = laname)) + geom_histogram(position ="identity", alpha= 0.7) +theme_minimal() +scale_fill_viridis_d()+facet_wrap(vars(laname)) + theme(legend.position = "none") +
+
+```
+
+## 2.5
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  ungroup() %>% 
+  mutate(Ai_s = (Ai-mean(Ai))/sd(Ai), 
+         Bi_s = (Bi-mean(Bi))/sd(Bi)) %>% 
+  group_by(laname) %>% 
+  summarize(day_night_ratio = sum(HMi)/sum(HRi), mean_stdzd_prod = mean(Ai_s), mean_stdzd_amen = mean(Bi_s)) %>% 
+  knitr::kable("latex")
+```
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  ungroup() %>% 
+  mutate(Ai_s = (Ai-mean(Ai))/sd(Ai), 
+         Bi_s = (Bi-mean(Bi))/sd(Bi)) %>% 
+  group_by(laname) %>% 
+  summarize(day_night_ratio = mean(HMi)/mean(HRi), mean_std_prod = mean(Ai_s), mean_std_amen = mean(Bi_s)) %>% 
+  ggplot(aes(day_night_ratio, mean_std_prod)) + geom_point() + theme_minimal()+xlim(NA, 10)
+```
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  ungroup() %>% 
+  mutate(Ai_s = (Ai-mean(Ai))/sd(Ai), 
+         Bi_s = (Bi-mean(Bi))/sd(Bi)) %>% 
+  group_by(laname) %>% 
+  summarize(day_night_ratio = mean(HMi)/mean(HRi), mean_std_prod = mean(Ai_s), mean_std_amen = mean(Bi_s)) %>% 
+  ggplot(aes(day_night_ratio, mean_std_amen)) + geom_point() + theme_minimal()+xlim(NA, 10)
+```
+
+```{r}
+dat %>% 
+  ggplot(aes(Bi, Bi_c)) + geom_point() + ylim(0.5, 2.5) + xlim(0.5,2.5)+ theme_minimal()
+```
+
+```{r}
+
+mod1 <- lm(log(Bi) ~ Oi, dat)
+summary(mod1)
+
+beta <- mod1$coefficients[2]
+
+dat %>% 
+  mutate(Bi_c2 = Bi*exp(beta*(Oi_c- Oi))) %>% 
+  ggplot(aes(Bi, Bi_c)) + geom_point() + ylim(0.5, 2.5) + xlim(0.5,2.5)+ theme_minimal()
+```
+
+
+
+
+```{r}
+dat %>% 
+  ggplot(aes(Ki, Ki_c)) + geom_point() + theme_minimal()
+```
+
+
+# Question 3
+## 3.2
+
+```{r}
+dat %>% 
+  ggplot(aes(Oi_diff, Qi_diff)) + geom_point() + theme_minimal()
+```
+
+```{r}
+dat %>% 
+  rename(omega_j = "ωj") %>%
+  rename(omega_i = "ωi") %>% 
+  filter(laname == "City of London") %>%
+  select(omega_i, omega_j) %>% 
+  pivot_longer(1:2,names_to = "omega", values_to = "wages") %>% 
+  ggplot(aes(wages, fill = omega)) + geom_histogram() + theme_minimal()
+```
+
+```{r}
+alpha <- 0.8
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c") %>% 
+  rename(LMi_c="Lᴹi_c") %>% 
+  rename(LMi="Lᴹi") %>%  
+  mutate(yi = Ai * HMi^alpha *LMi^(1-alpha),
+         yi_c = Ai*HMi_c^alpha*LMi_c^(1-alpha)) %>% 
+  mutate(y_diff = Yi_c1 -yi, 
+         O_diff = Oi_c - Oi) %>% 
+  select(y_diff, O_diff) %>%  
+  ggplot(aes(O_diff, y_diff)) + geom_point() + theme_minimal()
+```
+
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c") %>% 
+  rename(LMi_c="Lᴹi_c") %>% 
+  rename(LMi="Lᴹi") %>%  
+  mutate(yi = Ai * HMi^alpha *LMi^(1-alpha),
+         yi_c = Ai*HMi_c^alpha*LMi_c^(1-alpha)) %>% 
+  mutate(y_diff = Yi_c1 -yi, 
+         O_diff = Oi_c - Oi) %>% 
+  select(1, 2, y_diff, O_diff) %>% 
+  filter(laname != "City of London" & laname != "Westminster"& laname != "Tower Hamlets") %>% 
+  ggplot(aes(O_diff, y_diff)) + geom_point() + theme_minimal()
+  
+```
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c") %>% 
+  rename(LMi_c="Lᴹi_c") %>% 
+  rename(LMi="Lᴹi") %>%  
+  mutate(yi = Ai * HMi^alpha *LMi^(1-alpha),
+         yi_c = Ai*HMi_c^alpha*LMi_c^(1-alpha)) %>% 
+  mutate(y_diff = Yi_c1 -yi, 
+         O_diff = Oi_c - Oi) %>% 
+  select(1, 2, y_diff, O_diff) %>% 
+  filter(laname != "City of London" & laname != "Westminster"& laname != "Tower Hamlets") %>% 
+  ggplot(aes(y_diff)) + geom_histogram() +facet_wrap(vars(laname)) + theme_minimal() + xlim(c(-5000, NA))
+
+```
+
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c1") %>% 
+  rename(HRi_c="Hᴿi_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRi_diff = HRi_c - HRi, 
+         HMi_diff = HMi_c - HMi) %>% 
+  ggplot(aes(O_diff, HMi_diff)) + geom_point() + theme_minimal() + ggsave("HMI_diff.png", device = "png")
+```
+
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c1") %>% 
+  rename(HRi_c="Hᴿi_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRi_diff = HRi_c - HRi, 
+         HMi_diff = HMi_c - HMi) %>% 
+  ggplot(aes(O_diff, HMi_diff)) + geom_point() + facet_wrap(vars(laname)) + theme_minimal()
+```
+
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c1") %>% 
+  rename(HRi_c="Hᴿi_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRi_diff = HRi_c - HRi, 
+         HMi_diff = HMi_c - HMi) %>% 
+  ggplot(aes(O_diff, HRi_diff)) + geom_point() + theme_minimal() + ggsave("HRi_diff.png", device = "png")
+
+```
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c1") %>% 
+  rename(HRi_c="Hᴿi_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRi_diff = HRi_c - HRi, 
+         HMi_diff = HMi_c - HMi) %>% 
+  ggplot(aes(Qi_diff, HRi_diff)) + geom_point() + theme_minimal() + ggsave("Qi_HRi.png", device = "png")
+
+```
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c1") %>% 
+  rename(HRi_c="Hᴿi_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRi_diff = HRi_c - HRi, 
+         HMi_diff = HMi_c - HMi) %>% 
+  ggplot(aes(O_diff, HRi_diff)) + geom_point() + theme_minimal() + facet_wrap(vars(laname)) #+ ggsave("HRi_diff.png", device = "png")
+
+```
+
+
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c1="Hᴹi_c1") %>% 
+  rename(HRi_c1="Hᴿi_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRi_diff = HRi_c1 - HRi, 
+         HMi_diff = HMi_c1 - HMi) %>% 
+select(1,2, HRi, HRi_c1, HRi_diff)
+```
+
+
+```{r}
+dat %>% 
+  rename(HRj="Hᴿj") %>% 
+  rename(HMj="Hᴹj") %>% 
+  rename(HMj_c="Hᴹj_c1") %>% 
+  rename(HRj_c="Hᴿj_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRj_diff = HRj_c - HRj, 
+         HMj_diff = HMj_c - HMj) %>% 
+  ggplot(aes(O_diff, HRj_diff)) + geom_point() + theme_minimal() #+ ggsave("HRi_diff.png", device = "png")
+
+```
+```
+
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c1") %>% 
+  rename(HRi_c="Hᴿi_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRi_diff = HRi_c - HRi, 
+         HMi_diff = HMi_c - HMi) %>% 
+  ggplot(aes(O_diff, HRi_diff)) + geom_point() + theme_minimal() + facet_wrap(vars(laname))
+
+```
+
+
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c") %>% 
+  rename(HRi_c="Hᴿi_c") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         Bi_diff = Bi_c - Bi) %>% 
+  ggplot(aes(O_diff, Bi_diff)) + geom_point() + theme_minimal()
+
+```
+
+
+
+```{r}
+dat %>% 
+  rename(HRi="Hᴿi") %>% 
+  rename(HMi="Hᴹi") %>% 
+  rename(HMi_c="Hᴹi_c1") %>% 
+  rename(HRi_c="Hᴿi_c1") %>% 
+  mutate(O_diff = Oi_c - Oi, 
+         HRi_diff = HRi_c - HRi, 
+         HMi_diff = HMi_c - HMi) %>% 
+  select(1,2, HRi, HRi_c, HRi_diff) %>% 
+  arrange(HRi_diff)
+
+```
+
+
+
+## 3.3
+
+
+```{r}
+dat %>%
+  group_by(laname) %>% 
+  summarize(mean_ui = mean(uij), mean_ui_c = mean(uij_c)) %>% 
+  knitr::kable("latex")
+  
+```
+
+
+
+
+```{r}
+dat %>%
+  group_by(laname, msoai) %>% 
+  rename(omega_i = "ωi") %>% 
+  mutate(wi = omega_i^(1/epsilon)) %>% 
+  mutate(wi_diff = wi_c-wi) %>% 
+  mutate(ui_diff = uij_c - uij) %>% 
+  summarize(Qi_diff = mean(Qi_diff), wi_diff = mean(wi_diff), ui_diff = mean(ui_diff)) %>% 
+  ggplot(aes(Qi_diff, ui_diff)) + geom_point() + theme_minimal() + ggsave("util_Qi.png", device = "png")
+  
+```
+
+
+
+```{r}
+dat %>%
+  group_by(laname, msoai) %>% 
+  rename(omega_i = "ωi") %>% 
+  mutate(wi = omega_i^(1/epsilon)) %>% 
+  mutate(wi_diff = wi_c-wi) %>% 
+  mutate(ui_diff = uij_c - uij) %>% 
+  summarize(Qi_diff = mean(Qi_diff), wi_diff = mean(wi_diff), ui_diff = mean(ui_diff)) %>% 
+  ggplot(aes(wi_diff, ui_diff)) + geom_point() + theme_minimal()+ ggsave("util_wi.png", device = "png")
+  
+```
+
+```{r}
+dat %>%
+  group_by(laname, msoai) %>% 
+  rename(omega_i = "ωi") %>% 
+  mutate(wi = omega_i^(1/epsilon)) %>% 
+  mutate(wi_diff = wi_c1-wi) %>% 
+  mutate(ui_diff = uij_c - uij) %>% 
+  summarize(Qi_diff = mean(Qi_diff), wi_diff = mean(wi_diff), ui_diff = mean(ui_diff)) %>% 
+  ggplot(aes(wi_diff, ui_diff)) + geom_point() + theme_minimal()#+ ggsave("util_wi.png", device = "png")
+  
+```
+
+
+```{r}
+dat %>% 
+  select(1,2, 70, 71) %>% 
+  group_by(laname, msoai) %>% 
+  pivot_longer(3:4,names_to = "type", values_to = "utility") %>% 
+  ggplot(aes(utility, fill = type)) + geom_histogram(alpha = 0.8) + facet_wrap(vars(laname)) + theme_minimal() + ggsave("utility_hist.png", device = "png")
+```
+
+
+```{r}
+dat %>% 
+  select(1,2, 70, 71) %>% 
+  group_by(laname, msoai) %>% 
+  pivot_longer(3:4,names_to = "type", values_to = "utility") %>% 
+  ggplot(aes(utility, fill = type)) + geom_histogram(alpha = 0.8) + facet_wrap(vars(laname)) + theme_minimal() + ggsave("utility_hist.png", device = "png")
+```
+
+
+```{r}
+dat %>% 
+  select(Qi_c, Qi_c1, wi_c, wi_c1)
+```
+
